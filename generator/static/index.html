@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stochastic Speech Machine</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Заголовок -->
+        <header>
+            <h1>🎛️ Stochastic Speech Machine</h1>
+            <p>Инструмент пересборки человеческой речи</p>
+        </header>
+
+        <!-- Загрузка -->
+        <section class="init-section" id="initSection">
+            <h2>Загрузка данных...</h2>
+            <p class="hint">Подключение к генератору</p>
+        </section>
+
+        <!-- Основной интерфейс (скрыт до инициализации) -->
+        <div id="mainInterface" style="display: none;">
+            
+            <!-- Текущий семпл -->
+            <section class="current-sample">
+                <h2>Текущий семпл</h2>
+                <div id="currentSample" class="sample-display">
+                    <p class="no-sample">Нажмите "Следующий" для начала</p>
+                </div>
+                <audio id="audioPlayer" controls></audio>
+            </section>
+
+            <!-- Контролы генерации -->
+            <section class="generation-controls">
+                <h2>Управление</h2>
+                <div class="button-group">
+                    <button class="btn-primary" onclick="generateNext()">▶ Следующий</button>
+                    <button class="btn-secondary" onclick="generateSequence()">📝 Последовательность</button>
+                    <button class="btn-secondary" id="streamBtn" onclick="toggleStream()">🌊 Непрерывный поток</button>
+                    <button class="btn-secondary" onclick="resetGenerator()">🔄 Сброс</button>
+                </div>
+                
+                <!-- Температура -->
+                <div class="control-group">
+                    <label>
+                        Температура (хаотичность): <span id="tempValue">1.0</span>
+                    </label>
+                    <input type="range" id="temperature" min="0.1" max="2.0" step="0.1" value="1.0" 
+                           oninput="updateTemperature(this.value)">
+                    <div class="range-labels">
+                        <span>Детерминированно</span>
+                        <span>Хаос</span>
+                    </div>
+                </div>
+
+                <!-- Длина последовательности -->
+                <div class="control-group">
+                    <label>
+                        Длина последовательности: <span id="seqLengthValue">10</span>
+                    </label>
+                    <input type="range" id="seqLength" min="5" max="50" step="1" value="10" 
+                           oninput="document.getElementById('seqLengthValue').textContent = this.value">
+                </div>
+
+                <!-- Нахлест -->
+                <div class="control-group">
+                    <label>
+                        Нахлест семплов: <span id="overlapValue">0%</span>
+                    </label>
+                    <input type="range" id="overlap" min="0" max="90" step="5" value="0" 
+                           oninput="document.getElementById('overlapValue').textContent = this.value + '%'">
+                    <div class="range-labels">
+                        <span>Последовательно</span>
+                        <span>Сильный нахлест</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Правила -->
+            <section class="rules-section">
+                <h2>Правила генерации</h2>
+                
+                <div class="rules-header">
+                    <button class="btn-add" onclick="showAddRuleDialog()">+ Добавить правило</button>
+                </div>
+
+                <div id="activeRules" class="active-rules">
+                    <!-- Активные правила будут здесь -->
+                </div>
+
+                <!-- Диалог добавления правила -->
+                <div id="addRuleDialog" class="dialog" style="display: none;">
+                    <div class="dialog-content">
+                        <h3>Добавить правило</h3>
+                        
+                        <div class="rule-categories">
+                            <div class="category">
+                                <h4>🎵 Акустические</h4>
+                                <div class="rule-list" id="acousticRules"></div>
+                            </div>
+                            
+                            <div class="category">
+                                <h4>😊 Эмоциональные</h4>
+                                <div class="rule-list" id="emotionalRules"></div>
+                            </div>
+                            
+                            <div class="category">
+                                <h4>🔤 Фонетические</h4>
+                                <div class="rule-list" id="phoneticRules"></div>
+                            </div>
+                            
+                            <div class="category">
+                                <h4>📝 Грамматические</h4>
+                                <div class="rule-list" id="grammaticalRules"></div>
+                            </div>
+                        </div>
+                        
+                        <button onclick="closeAddRuleDialog()">Закрыть</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- История -->
+            <section class="history-section">
+                <h2>История генерации</h2>
+                <div id="history" class="history-list">
+                    <!-- История будет здесь -->
+                </div>
+                <button onclick="clearHistory()">Очистить историю</button>
+            </section>
+
+            <!-- Статистика -->
+            <section class="stats-section">
+                <h2>Статистика</h2>
+                <div id="stats" class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Всего семплов:</span>
+                        <span class="stat-value" id="totalSamples">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Активных правил:</span>
+                        <span class="stat-value" id="activeRulesCount">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Сгенерировано:</span>
+                        <span class="stat-value" id="generatedCount">0</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

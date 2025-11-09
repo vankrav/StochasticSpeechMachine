@@ -8,6 +8,7 @@ import argparse
 import json
 import logging
 import sys
+import shutil
 from pathlib import Path
 from typing import List, Dict, Any
 import time
@@ -20,6 +21,7 @@ from vosk import Model, KaldiRecognizer
 # Локальные модули для анализа
 from audio_features import calculate_all_audio_features, add_relative_features
 from linguistic_features import analyze_word
+from emotion_features import analyze_emotion, initialize_model as init_emotion_model
 
 
 # Настройка логирования
@@ -197,6 +199,14 @@ def extract_and_save_samples(
         logger.info(f"Директория для семплов: {samples_dir}")
         logger.info(f"Всего слов для обработки: {len(words)}")
         logger.info("Расчет акустических и лингвистических характеристик...")
+        logger.info("")
+    
+    # Инициализируем модель эмоций один раз
+    if logger:
+        logger.info("Инициализация модели анализа эмоций...")
+    init_emotion_model(logger)
+    if logger:
+        logger.info("")
     
     samples_metadata = []
     start_time = time.time()
@@ -235,6 +245,9 @@ def extract_and_save_samples(
         # === ЛИНГВИСТИЧЕСКИЙ АНАЛИЗ ===
         linguistic_features = analyze_word(word)
         
+        # === ЭМОЦИОНАЛЬНЫЙ АНАЛИЗ ===
+        emotion_features = analyze_emotion(word)
+        
         # Собираем все метаданные
         metadata = {
             "index": idx,
@@ -251,21 +264,27 @@ def extract_and_save_samples(
         # Добавляем лингвистические характеристики
         metadata.update(linguistic_features)
         
+        # Добавляем эмоциональные характеристики
+        metadata.update(emotion_features)
+        
         samples_metadata.append(metadata)
         
-        # Логирование прогресса
+        # Логирование прогресса (каждый 1%)
         if logger:
-            # Каждые 10 слов или для первых/последних
-            if idx < 3 or idx >= len(words) - 3 or (idx + 1) % 10 == 0:
+            total_words = len(words)
+            progress_percent = ((idx + 1) / total_words) * 100
+            prev_progress_percent = (idx / total_words) * 100 if idx > 0 else 0
+            
+            # Логируем при переходе через каждый процент
+            if int(progress_percent) > int(prev_progress_percent) or idx < 3 or idx >= total_words - 3:
                 duration = metadata['duration']
                 pitch = metadata.get('pitch_mean', 0)
                 pos = metadata.get('pos', 'N/A')
+                sentiment = metadata.get('sentiment', 'N/A')
                 logger.info(
-                    f"  [{idx+1}/{len(words)}] '{word}' - "
-                    f"{duration:.3f}s, {pitch:.0f}Hz, {pos}"
+                    f"  [{idx+1}/{total_words}] ({progress_percent:.1f}%) '{word}' - "
+                    f"{duration:.3f}s, {pitch:.0f}Hz, {pos}, {sentiment}"
                 )
-            elif (idx + 1) % 10 == 1:  # Показываем что мы работаем
-                logger.info(f"  Обработка слов {idx+1}-{min(idx+10, len(words))}...")
     
     processing_time = time.time() - start_time
     
@@ -311,8 +330,8 @@ def save_metadata(
         "source_file": str(original_file.absolute()),
         "sample_rate": sr,
         "total_words": len(metadata),
-        "metadata_version": "2.0",
-        "description": "Полные метаданные с акустическими и лингвистическими характеристиками",
+        "metadata_version": "3.0",
+        "description": "Полные метаданные с акустическими, лингвистическими и эмоциональными характеристиками",
         "features": {
             "acoustic": [
                 "duration (абсолютная и относительная)",
@@ -328,7 +347,15 @@ def save_metadata(
                 "нормальная форма слова",
                 "фонетика (длина, гласные/согласные, звонкие/глухие)",
                 "процентные соотношения букв"
+            ],
+            "emotion": [
+                "sentiment (positive/negative/neutral)",
+                "sentiment_score (уверенность модели)",
+                "вероятности для каждого класса эмоций"
             ]
+        },
+        "models": {
+            "emotion": "sismetanin/rubert-ru-sentiment-rusentiment"
         },
         "samples": metadata
     }
@@ -373,7 +400,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-o", "--output",
         type=Path,
-        help="Директория для вывода (по умолчанию: output_<filename>)"
+        help="Директория для вывода (по умолчанию: output_audio, перезаписывается при каждом запуске)"
     )
     
     parser.add_argument(
@@ -415,7 +442,12 @@ def main() -> int:
     if args.output:
         output_dir = args.output
     else:
-        output_dir = Path(f"output_{args.audio_file.stem}")
+        output_dir = Path("output_audio")
+    
+    # Удаляем старую директорию если существует
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+        logger.info(f"Удалена старая директория: {output_dir}")
     
     output_dir.mkdir(parents=True, exist_ok=True)
     

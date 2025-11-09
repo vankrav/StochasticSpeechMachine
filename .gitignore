@@ -12,6 +12,8 @@ __pycache__/
 
 # Models
 models/
+.cache/
+huggingface/
 
 # Output
 output_*/

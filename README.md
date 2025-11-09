@@ -23,6 +23,11 @@
 - **Фонетика**: длина слова, количество гласных/согласных/звонких/глухих
 - **Соотношения**: процентное соотношение разных типов букв
 
+**Эмоциональные (7 параметров):**
+- **Сентимент**: positive/negative/neutral/skip/speech (через RuBERT)
+- **Уверенность**: score модели (0-1)
+- **Вероятности**: для каждого из 5 классов эмоций
+
 ## Особенности
 
 - **Детальное логирование** - видите каждый этап обработки
@@ -49,7 +54,10 @@ pip install -r requirements.txt
 - `vosk` - распознавание речи
 - `librosa` - акустический анализ
 - `pymorphy3` - морфологический анализ (совместим с Python 3.11)
+- `transformers` + `torch` - анализ эмоций (RuBERT)
 - `numpy`, `soundfile` - обработка аудио
+
+**Примечание:** Первый запуск займет больше времени, т.к. модель RuBERT (~500MB) будет скачана автоматически.
 
 ### 3. Установка ffmpeg
 
@@ -65,17 +73,20 @@ brew install ffmpeg
 sudo apt-get install ffmpeg
 ```
 
-### 4. Установка модели Vosk
+### 4. Установка моделей
 
-Используйте автоматический скрипт установки:
+Используйте скрипт для автоматической установки обеих моделей:
 
 ```bash
+chmod +x setup_model.sh
 ./setup_model.sh
 ```
 
-Скрипт автоматически:
-- Скачает модель для русского языка (~45MB)
-- Распакует её в `./models/`
+Скрипт автоматически установит:
+- **Vosk** (~45MB) - модель распознавания речи в `./models/`
+- **RuBERT** (~500MB) - модель анализа эмоций в `~/.cache/huggingface/`
+
+Это может занять несколько минут в зависимости от скорости интернета.
 - Проверит корректность установки
 
 **Альтернативно:** можно скачать модель вручную
@@ -150,6 +161,8 @@ output_myaudio/
 └── metadata.json
 ```
 
+> 📖 **Подробное описание всех характеристик:** см. [METADATA_GUIDE.md](METADATA_GUIDE.md)
+
 ### Структура metadata.json
 
 ```json
@@ -157,11 +170,15 @@ output_myaudio/
   "source_file": "/path/to/original.mp3",
   "sample_rate": 16000,
   "total_words": 42,
-  "metadata_version": "2.0",
-  "description": "Полные метаданные с акустическими и лингвистическими характеристиками",
+  "metadata_version": "3.0",
+  "description": "Полные метаданные с акустическими, лингвистическими и эмоциональными характеристиками",
   "features": {
     "acoustic": ["duration", "amplitude", "pitch", "spectral", "mfcc", "energy", "voicing"],
-    "linguistic": ["морфология", "фонетика", "соотношения"]
+    "linguistic": ["морфология", "фонетика", "соотношения"],
+    "emotion": ["sentiment", "sentiment_score", "probabilities"]
+  },
+  "models": {
+    "emotion": "sismetanin/rubert-ru-sentiment-rusentiment"
   },
   "samples": [
     {
@@ -208,7 +225,15 @@ output_myaudio/
       "voiceless_consonants_count": 1,
       "vowels_percent": 33.33,
       "consonants_percent": 66.67,
-      "vowel_consonant_ratio": 0.5
+      "vowel_consonant_ratio": 0.5,
+      
+      "sentiment": "positive",
+      "sentiment_score": 0.8234,
+      "negative_prob": 0.0532,
+      "neutral_prob": 0.1234,
+      "positive_prob": 0.8234,
+      "skip_prob": 0.0000,
+      "speech_prob": 0.0000
     },
     ...
   ]
@@ -243,6 +268,14 @@ output_myaudio/
 - `voiced_consonants_count` / `voiceless_consonants_count`
 - `vowels_percent` / `consonants_percent` / и др. - процентные соотношения
 - `vowel_consonant_ratio` - соотношение гласных к согласным
+
+**Эмоциональные:**
+- `sentiment` - тип эмоции ("positive", "negative", "neutral", "skip", "speech")
+  - positive/negative/neutral - основные эмоции
+  - speech - речевые акты (приветствия, прощания)
+  - skip - неопределенные
+- `sentiment_score` - уверенность модели (0.0-1.0)
+- `negative_prob` / `neutral_prob` / `positive_prob` / `skip_prob` / `speech_prob` - вероятности всех классов
 
 ## Логирование
 
@@ -303,15 +336,16 @@ STOCHASTIC SPEECH MACHINE
 
 ## Планируемые улучшения
 
-**Версия 2.0 (текущая):** ✅
+**Версия 3.0 (текущая):** ✅
 - Акустические характеристики (амплитуда, pitch, спектр, MFCC, энергетика)
 - Лингвистические характеристики (морфология, фонетика)
+- Эмоциональный анализ (RuBERT sentiment)
 
 **Будущие версии:**
 - Количество слогов и ударение
 - Частотность слова в языке
 - Фонетическая транскрипция
-- Эмоциональная окраска (через ML-модели)
+- Расширенный эмоциональный анализ (больше классов эмоций)
 - Темп и ритмические паттерны
 
 ## Требования
