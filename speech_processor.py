@@ -17,6 +17,10 @@ import librosa
 import soundfile as sf
 from vosk import Model, KaldiRecognizer
 
+# Локальные модули для анализа
+from audio_features import calculate_all_audio_features, add_relative_features
+from linguistic_features import analyze_word
+
 
 # Настройка логирования
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -192,9 +196,13 @@ def extract_and_save_samples(
     if logger:
         logger.info(f"Директория для семплов: {samples_dir}")
         logger.info(f"Всего слов для обработки: {len(words)}")
+        logger.info("Расчет акустических и лингвистических характеристик...")
     
     samples_metadata = []
     start_time = time.time()
+    
+    # Общая длительность для относительных метрик
+    audio_duration = len(audio) / sr
     
     for idx, word_info in enumerate(words):
         word = word_info["word"]
@@ -214,9 +222,6 @@ def extract_and_save_samples(
                 logger.warning(f"  [{idx+1}/{len(words)}] Пропуск пустого сегмента для слова '{word}'")
             continue
         
-        # Вычисляем длительность
-        duration = len(audio_segment) / sr
-        
         # Формируем имя файла (номер + слово)
         sample_filename = f"{idx:04d}_{word}.wav"
         sample_path = samples_dir / sample_filename
@@ -224,16 +229,27 @@ def extract_and_save_samples(
         # Сохраняем аудио сегмент
         sf.write(sample_path, audio_segment, sr)
         
-        # Собираем метаданные (пока только слово и длительность)
+        # === АКУСТИЧЕСКИЙ АНАЛИЗ ===
+        audio_features = calculate_all_audio_features(audio_segment, sr)
+        
+        # === ЛИНГВИСТИЧЕСКИЙ АНАЛИЗ ===
+        linguistic_features = analyze_word(word)
+        
+        # Собираем все метаданные
         metadata = {
             "index": idx,
             "word": word,
             "filename": sample_filename,
-            "duration": round(duration, 3),
             "start_time": round(start_time_word, 3),
             "end_time": round(end_time_word, 3),
             "confidence": round(confidence, 3)
         }
+        
+        # Добавляем акустические характеристики
+        metadata.update(audio_features)
+        
+        # Добавляем лингвистические характеристики
+        metadata.update(linguistic_features)
         
         samples_metadata.append(metadata)
         
@@ -241,7 +257,13 @@ def extract_and_save_samples(
         if logger:
             # Каждые 10 слов или для первых/последних
             if idx < 3 or idx >= len(words) - 3 or (idx + 1) % 10 == 0:
-                logger.info(f"  [{idx+1}/{len(words)}] '{word}' - {duration:.3f}s (conf: {confidence:.2f})")
+                duration = metadata['duration']
+                pitch = metadata.get('pitch_mean', 0)
+                pos = metadata.get('pos', 'N/A')
+                logger.info(
+                    f"  [{idx+1}/{len(words)}] '{word}' - "
+                    f"{duration:.3f}s, {pitch:.0f}Hz, {pos}"
+                )
             elif (idx + 1) % 10 == 1:  # Показываем что мы работаем
                 logger.info(f"  Обработка слов {idx+1}-{min(idx+10, len(words))}...")
     
@@ -250,6 +272,13 @@ def extract_and_save_samples(
     if logger:
         logger.info(f"✓ Обработка завершена за {processing_time:.2f}s")
         logger.info(f"✓ Сохранено семплов: {len(samples_metadata)}")
+        logger.info("Расчет относительных характеристик...")
+    
+    # Добавляем относительные характеристики (нормализованные по всем словам)
+    samples_metadata = add_relative_features(samples_metadata, audio_duration)
+    
+    if logger:
+        logger.info("✓ Относительные характеристики добавлены")
     
     return samples_metadata
 
@@ -282,8 +311,25 @@ def save_metadata(
         "source_file": str(original_file.absolute()),
         "sample_rate": sr,
         "total_words": len(metadata),
-        "metadata_version": "1.0",
-        "description": "Метаданные содержат: слово и длительность (будут добавлены дополнительные характеристики)",
+        "metadata_version": "2.0",
+        "description": "Полные метаданные с акустическими и лингвистическими характеристиками",
+        "features": {
+            "acoustic": [
+                "duration (абсолютная и относительная)",
+                "amplitude (RMS, peak, относительная громкость)",
+                "pitch (mean, min, max, std, относительная)",
+                "spectral (centroid, bandwidth, flatness, rolloff)",
+                "mfcc (13 коэффициентов тембра)",
+                "energy_envelope (attack_time, variance)",
+                "voicing (zero_crossing_rate)"
+            ],
+            "linguistic": [
+                "морфология (часть речи, род, число, падеж, время)",
+                "нормальная форма слова",
+                "фонетика (длина, гласные/согласные, звонкие/глухие)",
+                "процентные соотношения букв"
+            ]
+        },
         "samples": metadata
     }
     

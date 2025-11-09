@@ -2,3 +2,5 @@ vosk==0.3.44
 librosa>=0.10.0
 soundfile>=0.12.0
 numpy>=1.23.0
+pymorphy3>=1.0.0
+pymorphy3-dicts-ru>=2.4.0
