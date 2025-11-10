@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas - Stochastic Speech Machine</title>
+    <link rel="stylesheet" href="css/canvas.css">
+</head>
+<body>
+    <div class="canvas-container">
+        <!-- Кнопка сворачивания панели (СНАРУЖИ панели!) -->
+        <button class="panel-toggle" id="panelToggle" title="Скрыть панель">◄</button>
+        
+        <!-- Панель управления -->
+        <div class="controls-panel" id="controlsPanel">
+            <div class="panel-content">
+                <div class="navigation" style="margin-bottom: 25px; padding-bottom: 20px; border-bottom: 2px solid #000000;">
+                    <h3 style="font-size: 14px; margin-bottom: 10px; color: #000000; font-weight: bold; letter-spacing: 2px;">CANVAS</h3>
+                    <nav>
+                        <a href="/" style="color: #000000; text-decoration: none; font-size: 11px; font-weight: bold; letter-spacing: 1px;">← GENERATOR</a>
+                    </nav>
+                </div>
+            <div class="control-group">
+                <label>
+                    СКОРОСТЬ: <span id="speedValue">1.0</span>X
+                </label>
+                <input type="range" id="readingSpeed" min="0.1" max="3.0" step="0.1" value="1.0">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    ШИРИНА: <span id="widthValue">600</span>PX
+                </label>
+                <input type="range" id="columnWidth" min="300" max="1200" step="50" value="600">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    НАХЛЕСТ: <span id="overlapValue">0</span>MS
+                    <span style="display: block; font-size: 9px; margin-top: 3px; font-weight: normal; opacity: 0.7;">+ НАЛОЖЕНИЕ / - ПАУЗА</span>
+                </label>
+                <input type="range" id="overlap" min="-500" max="500" step="10" value="30">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    АВТОЗАМЕНА: <span id="autoReplaceIntervalValue">2.0</span>S
+                    <span style="display: block; font-size: 9px; margin-top: 3px; font-weight: normal; opacity: 0.7;">ИНТЕРВАЛ МЕЖДУ ЗАМЕНАМИ</span>
+                </label>
+                <input type="range" id="autoReplaceInterval" min="0.01" max="10.0" step="0.01" value="0.5">
+            </div>
+
+            <div class="button-group">
+                <button id="playBtn" class="btn-primary">▶ ИГРАТЬ</button>
+                <button id="pauseBtn" class="btn-secondary" disabled>■ ПАУЗА</button>
+                <button id="resetBtn" class="btn-secondary">◄ СБРОС</button>
+                <button id="clearLoopBtn" class="btn-secondary">⊗ СБРОС ЦИКЛА</button>
+                <button id="replaceRandomBtn" class="btn-secondary">⇄ ЗАМЕНА СЛОВА</button>
+                <button id="autoReplaceToggleBtn" class="btn-secondary">⟳ АВТОЗАМЕНА: ВЫКЛ</button>
+            </div>
+
+            <div class="info">
+                <p><strong>ДАННЫЕ:</strong> <span id="wordCount">0</span></p>
+                <p><strong>ТЕКУЩИЙ:</strong> <span id="currentWordIndex">-</span></p>
+                <p><strong>АВТОЗАМЕНА:</strong> <span id="autoReplaceStatus">ВЫКЛ</span></p>
+            </div>
+            </div>
+        </div>
+
+        <!-- Основной экран с текстом -->
+        <div class="text-canvas">
+            <div class="reader-indicator" id="readerIndicator"></div>
+            <div class="text-column" id="textColumn">
+                <p class="loading">ЗАГРУЗКА...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/canvas.js"></script>
+</body>
+</html>

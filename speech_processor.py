@@ -174,7 +174,7 @@ def extract_and_save_samples(
     logger: logging.Logger = None
 ) -> List[Dict[str, Any]]:
     """
-    Извлекает аудио сегменты для каждого слова и сохраняет их
+    Извлекает аудио сегменты для каждого слова и паузы между ними
     
     Args:
         audio: аудио массив
@@ -185,11 +185,11 @@ def extract_and_save_samples(
         logger: логгер для вывода информации
         
     Returns:
-        Список метаданных для каждого семпла
+        Список метаданных для каждого семпла (слова и паузы)
     """
     if logger:
         logger.info("=" * 60)
-        logger.info("ЭТАП 2: Извлечение и сохранение семплов")
+        logger.info("ЭТАП 2: Извлечение и сохранение семплов (слова и паузы)")
         logger.info("=" * 60)
     
     samples_dir = output_dir / "samples"
@@ -214,7 +214,10 @@ def extract_and_save_samples(
     # Общая длительность для относительных метрик
     audio_duration = len(audio) / sr
     
-    for idx, word_info in enumerate(words):
+    # Счетчик для индексов всех элементов (слова + паузы)
+    global_idx = 0
+    
+    for word_idx, word_info in enumerate(words):
         word = word_info["word"]
         start_time_word = word_info["start"]
         end_time_word = word_info["end"]
@@ -229,11 +232,11 @@ def extract_and_save_samples(
         
         if len(audio_segment) == 0:
             if logger:
-                logger.warning(f"  [{idx+1}/{len(words)}] Пропуск пустого сегмента для слова '{word}'")
+                logger.warning(f"  [{word_idx+1}/{len(words)}] Пропуск пустого сегмента для слова '{word}'")
             continue
         
         # Формируем имя файла (номер + слово)
-        sample_filename = f"{idx:04d}_{word}.wav"
+        sample_filename = f"{global_idx:04d}_{word}.wav"
         sample_path = samples_dir / sample_filename
         
         # Сохраняем аудио сегмент
@@ -250,7 +253,8 @@ def extract_and_save_samples(
         
         # Собираем все метаданные
         metadata = {
-            "index": idx,
+            "index": global_idx,
+            "type": "word",
             "word": word,
             "filename": sample_filename,
             "start_time": round(start_time_word, 3),
@@ -269,28 +273,77 @@ def extract_and_save_samples(
         
         samples_metadata.append(metadata)
         
-        # Логирование прогресса (каждый 1%)
+        # Логирование прогресса
         if logger:
             total_words = len(words)
-            progress_percent = ((idx + 1) / total_words) * 100
-            prev_progress_percent = (idx / total_words) * 100 if idx > 0 else 0
+            progress_percent = ((word_idx + 1) / total_words) * 100
+            prev_progress_percent = (word_idx / total_words) * 100 if word_idx > 0 else 0
             
-            # Логируем при переходе через каждый процент
-            if int(progress_percent) > int(prev_progress_percent) or idx < 3 or idx >= total_words - 3:
+            if int(progress_percent) > int(prev_progress_percent) or word_idx < 3 or word_idx >= total_words - 3:
                 duration = metadata['duration']
                 pitch = metadata.get('pitch_mean', 0)
                 pos = metadata.get('pos', 'N/A')
                 sentiment = metadata.get('sentiment', 'N/A')
                 logger.info(
-                    f"  [{idx+1}/{total_words}] ({progress_percent:.1f}%) '{word}' - "
+                    f"  [{word_idx+1}/{total_words}] ({progress_percent:.1f}%) '{word}' - "
                     f"{duration:.3f}s, {pitch:.0f}Hz, {pos}, {sentiment}"
                 )
+        
+        global_idx += 1
+        
+        # === ОБРАБОТКА ПАУЗЫ ПОСЛЕ СЛОВА ===
+        # Проверяем, есть ли следующее слово
+        if word_idx < len(words) - 1:
+            next_word_info = words[word_idx + 1]
+            next_start_time = next_word_info["start"]
+            
+            # Вычисляем длительность паузы
+            pause_duration = next_start_time - end_time_word
+            
+            # Если пауза существует (больше 0.01 секунды)
+            if pause_duration > 0.01:
+                # Извлекаем аудио паузы
+                pause_start_sample = end_sample
+                pause_end_sample = int(next_start_time * sr)
+                pause_segment = audio[pause_start_sample:pause_end_sample]
+                
+                if len(pause_segment) > 0:
+                    # Формируем имя файла для паузы
+                    pause_filename = f"{global_idx:04d}_pause.wav"
+                    pause_path = samples_dir / pause_filename
+                    
+                    # Сохраняем аудио паузы
+                    sf.write(pause_path, pause_segment, sr)
+                    
+                    # Минимальный акустический анализ для паузы
+                    pause_audio_features = calculate_all_audio_features(pause_segment, sr)
+                    
+                    # Метаданные для паузы
+                    pause_metadata = {
+                        "index": global_idx,
+                        "type": "pause",
+                        "word": "[PAUSE]",
+                        "filename": pause_filename,
+                        "start_time": round(end_time_word, 3),
+                        "end_time": round(next_start_time, 3),
+                        "confidence": 1.0
+                    }
+                    
+                    # Добавляем акустические характеристики паузы
+                    pause_metadata.update(pause_audio_features)
+                    
+                    samples_metadata.append(pause_metadata)
+                    global_idx += 1
     
     processing_time = time.time() - start_time
     
     if logger:
+        total_words = len([s for s in samples_metadata if s['type'] == 'word'])
+        total_pauses = len([s for s in samples_metadata if s['type'] == 'pause'])
         logger.info(f"✓ Обработка завершена за {processing_time:.2f}s")
-        logger.info(f"✓ Сохранено семплов: {len(samples_metadata)}")
+        logger.info(f"✓ Сохранено слов: {total_words}")
+        logger.info(f"✓ Сохранено пауз: {total_pauses}")
+        logger.info(f"✓ Всего семплов: {len(samples_metadata)}")
         logger.info("Расчет относительных характеристик...")
     
     # Добавляем относительные характеристики (нормализованные по всем словам)
@@ -326,12 +379,18 @@ def save_metadata(
     
     json_path = output_dir / "metadata.json"
     
+    # Подсчет слов и пауз
+    total_words = len([s for s in metadata if s.get('type') == 'word'])
+    total_pauses = len([s for s in metadata if s.get('type') == 'pause'])
+    
     output_data = {
         "source_file": str(original_file.absolute()),
         "sample_rate": sr,
-        "total_words": len(metadata),
-        "metadata_version": "3.0",
-        "description": "Полные метаданные с акустическими, лингвистическими и эмоциональными характеристиками",
+        "total_samples": len(metadata),
+        "total_words": total_words,
+        "total_pauses": total_pauses,
+        "metadata_version": "3.1",
+        "description": "Полные метаданные с акустическими, лингвистическими и эмоциональными характеристиками. Включает как слова, так и паузы между ними.",
         "features": {
             "acoustic": [
                 "duration (абсолютная и относительная)",
@@ -346,12 +405,19 @@ def save_metadata(
                 "морфология (часть речи, род, число, падеж, время)",
                 "нормальная форма слова",
                 "фонетика (длина, гласные/согласные, звонкие/глухие)",
-                "процентные соотношения букв"
+                "процентные соотношения букв",
+                "применяется только для слов (type='word')"
             ],
             "emotion": [
                 "sentiment (positive/negative/neutral)",
                 "sentiment_score (уверенность модели)",
-                "вероятности для каждого класса эмоций"
+                "вероятности для каждого класса эмоций",
+                "применяется только для слов (type='word')"
+            ],
+            "pauses": [
+                "type='pause' для пауз",
+                "word='[PAUSE]' маркер",
+                "только акустические характеристики"
             ]
         },
         "models": {
@@ -495,12 +561,16 @@ def main() -> int:
         
         # Финальная статистика
         total_time = time.time() - total_start_time
+        total_words = len([s for s in samples_metadata if s.get('type') == 'word'])
+        total_pauses = len([s for s in samples_metadata if s.get('type') == 'pause'])
         
         logger.info("=" * 60)
         logger.info("✓ ОБРАБОТКА ЗАВЕРШЕНА!")
         logger.info("=" * 60)
         logger.info(f"Общее время: {total_time:.2f}s")
-        logger.info(f"Обработано слов: {len(samples_metadata)}")
+        logger.info(f"Обработано слов: {total_words}")
+        logger.info(f"Обработано пауз: {total_pauses}")
+        logger.info(f"Всего семплов: {len(samples_metadata)}")
         logger.info(f"Директория семплов: {output_dir / 'samples'}")
         logger.info(f"Файл метаданных: {output_dir / 'metadata.json'}")
         logger.info("=" * 60)

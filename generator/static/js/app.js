@@ -72,11 +72,14 @@ function populateRuleDialog() {
         'acoustic': 'acousticRules',
         'emotional': 'emotionalRules',
         'phonetic': 'phoneticRules',
-        'grammatical': 'grammaticalRules'
+        'grammatical': 'grammaticalRules',
+        'markov': 'markovRules'
     };
     
     for (const [category, elementId] of Object.entries(categories)) {
         const container = document.getElementById(elementId);
+        if (!container) continue; // Пропускаем если контейнер не найден
+        
         container.innerHTML = '';
         
         const rules = availableRules[category] || [];
@@ -143,7 +146,11 @@ async function promptRuleParams(ruleId, paramNames) {
         'emotion_wave': {wave: ['positive', 'neutral', 'negative']},
         'sentiment_gradient': {direction: 'ascending'},
         'vowel_consonant_ratio': {mode: 'alternating'},
-        'pos_pattern': {pattern: ['NOUN', 'VERB', 'NOUN']}
+        'pos_pattern': {pattern: ['NOUN', 'VERB', 'NOUN']},
+        'markov_bigram': {smoothing: 0.01},
+        'markov_emotional': {smoothing: 0.1},
+        'markov_pos': {smoothing: 0.1},
+        'markov_chain': {order: 1, use_pos: false, use_sentiment: false, smoothing: 0.01}
     };
     
     return defaults[ruleId] || {};

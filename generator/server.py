@@ -11,14 +11,17 @@ import sys
 
 # Добавляем путь к модулям
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from generator import StochasticGenerator
+from linguistic_features import find_most_similar_word, calculate_similarity_score
 from rules import (
     PitchProximityRule, PitchDirectionRule, DurationPatternRule, 
     AmplitudeWaveRule, MFCCProximityRule,
     EmotionWaveRule, EmotionContrastRule, SentimentGradientRule,
     AlliterationRule, VowelConsonantRatioRule, VoicingAlternationRule,
-    POSPatternRule, POSAlternationRule
+    POSPatternRule, POSAlternationRule,
+    MarkovChainRule, MarkovChainBigramRule, MarkovEmotionalRule, MarkovPOSRule
 )
 
 app = Flask(__name__, static_folder='static')
@@ -33,6 +36,12 @@ samples_dir = None
 def index():
     """Главная страница"""
     return send_from_directory('static', 'index.html')
+
+
+@app.route('/canvas')
+def canvas():
+    """Canvas - модуль визуализации и манипуляции текста"""
+    return send_from_directory('static', 'canvas.html')
 
 
 @app.route('/css/<path:filename>')
@@ -100,6 +109,12 @@ def get_available_rules():
         'grammatical': [
             {'id': 'pos_pattern', 'name': 'Паттерн частей речи', 'params': ['pattern']},
             {'id': 'pos_alternation', 'name': 'Существительное/Глагол', 'params': []}
+        ],
+        'markov': [
+            {'id': 'markov_bigram', 'name': 'Markov Bigram (слова)', 'params': ['smoothing']},
+            {'id': 'markov_emotional', 'name': 'Markov Emotional (эмоции)', 'params': ['smoothing']},
+            {'id': 'markov_pos', 'name': 'Markov POS (части речи)', 'params': ['smoothing']},
+            {'id': 'markov_chain', 'name': 'Markov Chain (комплексная)', 'params': ['order', 'use_pos', 'use_sentiment', 'smoothing']}
         ]
     }
     return jsonify(rules_info)
@@ -133,12 +148,26 @@ def add_rule():
         'pos_alternation': POSAlternationRule
     }
     
-    rule_class = rule_classes.get(rule_id)
-    if not rule_class:
-        return jsonify({'error': f'Unknown rule: {rule_id}'}), 400
+    # Markov правила требуют samples при создании
+    markov_rule_classes = {
+        'markov_bigram': MarkovChainBigramRule,
+        'markov_emotional': MarkovEmotionalRule,
+        'markov_pos': MarkovPOSRule,
+        'markov_chain': MarkovChainRule
+    }
     
     try:
-        rule = rule_class(weight=weight, **params)
+        # Обычные правила
+        if rule_id in rule_classes:
+            rule_class = rule_classes[rule_id]
+            rule = rule_class(weight=weight, **params)
+        # Markov правила
+        elif rule_id in markov_rule_classes:
+            rule_class = markov_rule_classes[rule_id]
+            rule = rule_class(generator.samples, weight=weight, **params)
+        else:
+            return jsonify({'error': f'Unknown rule: {rule_id}'}), 400
+        
         generator.add_rule(rule)
         return jsonify({'success': True, 'rule_name': rule.name})
     except Exception as e:
@@ -282,6 +311,7 @@ def list_samples():
     samples_list = [
         {
             'index': s.get('index'),
+            'type': s.get('type', 'word'),  # По умолчанию 'word' для обратной совместимости
             'word': s.get('word'),
             'filename': s.get('filename'),
             'duration': s.get('duration'),
@@ -292,6 +322,55 @@ def list_samples():
     ]
     
     return jsonify({'samples': samples_list})
+
+
+@app.route('/api/find-similar-word', methods=['POST'])
+def find_similar_word():
+    """Находит наиболее похожее слово из датасета с учетом частоты использования"""
+    if not generator:
+        return jsonify({'error': 'Generator not initialized'}), 400
+    
+    data = request.json
+    target_word = data.get('target_word')
+    exclude_indices = data.get('exclude_indices', [])
+    usage_as_replacement = data.get('usage_as_replacement', {})
+    
+    if not target_word:
+        return jsonify({'error': 'target_word is required'}), 400
+    
+    try:
+        # Конвертируем ключи usage_as_replacement из строк в числа (JSON передает ключи как строки)
+        usage_weights = {int(k): v for k, v in usage_as_replacement.items()} if usage_as_replacement else {}
+        
+        # Находим наиболее похожее слово с учетом весов использования
+        similar_word = find_most_similar_word(
+            target_word_data=target_word,
+            all_words=generator.samples,
+            exclude_indices=exclude_indices,
+            usage_weights=usage_weights
+        )
+        
+        if similar_word:
+            # Вычисляем оценку сходства для информации
+            similarity_score = calculate_similarity_score(target_word, similar_word)
+            usage_count = usage_weights.get(similar_word.get('index'), 0)
+            
+            return jsonify({
+                'success': True,
+                'similar_word': similar_word,
+                'similarity_score': similarity_score,
+                'usage_count': usage_count,
+                'original_word': target_word.get('word'),
+                'replaced_with': similar_word.get('word')
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'No similar word found'
+            }), 404
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

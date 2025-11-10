@@ -1,0 +1,475 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Courier New', 'Courier', monospace;
+    background: #ffffff;
+    color: #000000;
+    overflow-x: hidden;
+}
+
+.canvas-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* Панель управления */
+.controls-panel {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 280px;
+    height: 100vh;
+    background: #ffffff;
+    border-right: 2px solid #000000;
+    overflow-y: auto;
+    z-index: 100;
+    transition: transform 0.3s ease;
+}
+
+.controls-panel.collapsed {
+    transform: translateX(-280px);
+}
+
+.panel-content {
+    padding: 30px 20px;
+}
+
+/* Кнопка сворачивания панели */
+.panel-toggle {
+    position: fixed;
+    left: 280px;
+    top: 20px;
+    width: 40px;
+    height: 60px;
+    background: #000000;
+    color: #ffffff;
+    border: 3px solid #000000;
+    border-radius: 0;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Courier New', 'Courier', monospace;
+    font-weight: bold;
+    z-index: 101;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.panel-toggle:hover {
+    background: #ffffff;
+    color: #000000;
+    box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.5);
+    transform: scale(1.05);
+}
+
+.control-group {
+    margin-bottom: 25px;
+}
+
+.control-group label {
+    display: block;
+    font-size: 12px;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #000000;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.control-group input[type="range"] {
+    width: 100%;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: #e0e0e0;
+    outline: none;
+    border: 1px solid #000000;
+}
+
+/* Ползунок слайдера - Chrome/Safari */
+.control-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #000000;
+    cursor: pointer;
+    border: 2px solid #000000;
+    transition: all 0.1s;
+}
+
+.control-group input[type="range"]::-webkit-slider-thumb:hover {
+    background: #ffffff;
+    border: 2px solid #000000;
+    transform: scale(1.1);
+}
+
+/* Ползунок слайдера - Firefox */
+.control-group input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #000000;
+    cursor: pointer;
+    border: 2px solid #000000;
+    border-radius: 0;
+    transition: all 0.1s;
+}
+
+.control-group input[type="range"]::-moz-range-thumb:hover {
+    background: #ffffff;
+    border: 2px solid #000000;
+    transform: scale(1.1);
+}
+
+/* Трек слайдера - Firefox */
+.control-group input[type="range"]::-moz-range-track {
+    background: #e0e0e0;
+    border: 1px solid #000000;
+    height: 4px;
+}
+
+/* Активное состояние */
+.control-group input[type="range"]:active::-webkit-slider-thumb {
+    background: #666666;
+}
+
+.control-group input[type="range"]:active::-moz-range-thumb {
+    background: #666666;
+}
+
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 25px;
+}
+
+.btn-primary,
+.btn-secondary {
+    padding: 12px 16px;
+    border: 2px solid #000000;
+    border-radius: 0;
+    font-size: 12px;
+    font-weight: bold;
+    font-family: 'Courier New', 'Courier', monospace;
+    cursor: pointer;
+    transition: all 0.1s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn-primary {
+    background: #000000;
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background: #ffffff;
+    color: #000000;
+}
+
+.btn-primary:disabled {
+    background: #cccccc;
+    color: #999999;
+    border-color: #999999;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: #ffffff;
+    color: #000000;
+}
+
+.btn-secondary:hover {
+    background: #000000;
+    color: #ffffff;
+}
+
+.btn-secondary:disabled {
+    background: #ffffff;
+    color: #cccccc;
+    border-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.info {
+    padding: 15px;
+    background: #ffffff;
+    border-radius: 0;
+    border: 2px solid #000000;
+}
+
+.info p {
+    font-size: 11px;
+    margin-bottom: 8px;
+    color: #000000;
+}
+
+.info p:last-child {
+    margin-bottom: 0;
+}
+
+.info strong {
+    color: #000000;
+    font-weight: bold;
+}
+
+/* Основной экран */
+.text-canvas {
+    margin-left: 280px;
+    width: calc(100% - 280px);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 80px 40px 40px;
+    position: relative;
+    background: #ffffff;
+    transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+/* Считыватель - квадрат над словом */
+.reader-indicator {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #000000;
+    border-radius: 0;
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0;
+    transition: all 0.1s linear;
+    border: 2px solid #000000;
+}
+
+.reader-indicator.active {
+    opacity: 1;
+}
+
+/* Колонка текста */
+.text-column {
+    width: 600px;
+    line-height: 2.2;
+    font-size: 18px;
+    text-align: left;
+    transition: width 0.1s linear;
+}
+
+.loading {
+    text-align: center;
+    color: #999999;
+    font-style: normal;
+}
+
+/* Слова */
+.word {
+    display: inline;
+    padding: 2px 4px;
+    padding-top: 6px;  /* Дополнительный отступ сверху для кнопок */
+    cursor: move;
+    position: relative;
+    transition: background-color 0.1s, color 0.1s;
+    user-select: none;
+    border: 1px solid transparent;
+}
+
+.word:hover {
+    background-color: #e0e0e0;
+    border-radius: 0;
+    border-color: #000000;
+}
+
+.word.reading {
+    background-color: #000000;
+    color: #ffffff;
+    border-radius: 0;
+}
+
+.word.dragging {
+    opacity: 0.5;
+    background-color: #e0e0e0;
+}
+
+.word.drag-over {
+    border-left: 3px solid #000000;
+}
+
+/* Паузы */
+.pause {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #999999;
+    border: 1px solid #999999;
+    cursor: move;
+    position: relative;
+    user-select: none;
+    vertical-align: middle;
+    margin: 0 4px;
+    padding-top: 8px;  /* Невидимая область сверху для кнопок */
+}
+
+.pause:hover {
+    background: #000000;
+    border-color: #000000;
+}
+
+.pause.reading {
+    background: #000000;
+    border: 2px solid #000000;
+}
+
+.pause.dragging {
+    opacity: 0.5;
+}
+
+.pause.drag-over {
+    border-left: 3px solid #000000;
+}
+
+/* Кнопки управления элементами */
+.word .delete-btn,
+.pause .delete-btn,
+.word .duplicate-btn,
+.pause .duplicate-btn,
+.word .loop-start-btn,
+.pause .loop-start-btn,
+.word .loop-end-btn,
+.pause .loop-end-btn {
+    display: none;
+    position: absolute;
+    top: -16px;  /* Ближе к слову из-за padding-top */
+    width: 18px;
+    height: 18px;
+    background: #000000;
+    color: #ffffff;
+    border: 2px solid #000000;
+    border-radius: 0;
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 10;
+    padding: 0;
+    font-family: 'Courier New', 'Courier', monospace;
+    font-weight: bold;
+}
+
+.word .delete-btn,
+.pause .delete-btn {
+    right: -5px;
+}
+
+.word .duplicate-btn,
+.pause .duplicate-btn {
+    right: 18px;
+}
+
+.word .loop-start-btn,
+.pause .loop-start-btn {
+    right: 41px;
+}
+
+.word .loop-end-btn,
+.pause .loop-end-btn {
+    right: 64px;
+}
+
+.word:hover .delete-btn,
+.pause:hover .delete-btn,
+.word:hover .duplicate-btn,
+.pause:hover .duplicate-btn,
+.word:hover .loop-start-btn,
+.pause:hover .loop-start-btn,
+.word:hover .loop-end-btn,
+.pause:hover .loop-end-btn,
+.word .delete-btn:hover,
+.pause .delete-btn:hover,
+.word .duplicate-btn:hover,
+.pause .duplicate-btn:hover,
+.word .loop-start-btn:hover,
+.pause .loop-start-btn:hover,
+.word .loop-end-btn:hover,
+.pause .loop-end-btn:hover {
+    display: block;
+}
+
+.word .delete-btn:hover,
+.pause .delete-btn:hover,
+.word .duplicate-btn:hover,
+.pause .duplicate-btn:hover,
+.word .loop-start-btn:hover,
+.pause .loop-start-btn:hover,
+.word .loop-end-btn:hover,
+.pause .loop-end-btn:hover {
+    background: #ffffff;
+    color: #000000;
+}
+
+/* Рамки зацикленного фрагмента */
+.word.loop-start,
+.pause.loop-start {
+    border-left: 3px solid #000000;
+    padding-left: 5px;
+}
+
+.word.loop-end,
+.pause.loop-end {
+    border-right: 3px solid #000000;
+    padding-right: 5px;
+}
+
+/* Текст вне луп - серый */
+.word.outside-loop {
+    color: #999999;
+}
+
+.pause.outside-loop {
+    background: #cccccc;
+    border-color: #cccccc;
+}
+
+/* Пробелы между словами */
+.word::after {
+    content: ' ';
+}
+
+/* Замененные слова - подкрашивание */
+.word.replaced {
+    border-radius: 2px;
+    transition: background-color 0.3s ease;
+}
+
+.word.replaced:hover {
+    border-color: #ff9900;
+}
+
+/* Адаптивный дизайн */
+@media (max-width: 768px) {
+    .controls-panel {
+        width: 100%;
+        height: auto;
+        position: relative;
+        border-right: none;
+        border-bottom: 2px solid #000000;
+    }
+
+    .text-canvas {
+        margin-left: 0;
+        width: 100%;
+        padding: 40px 20px;
+    }
+
+    .text-column {
+        width: 100% !important;
+    }
+}
+
+/* Анимация отключена для угловатого дизайна */

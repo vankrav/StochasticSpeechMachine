@@ -24,6 +24,12 @@ from .grammatical import (
     POSPatternRule,
     POSAlternationRule
 )
+from .markov import (
+    MarkovChainRule,
+    MarkovChainBigramRule,
+    MarkovEmotionalRule,
+    MarkovPOSRule
+)
 
 __all__ = [
     'Rule',
@@ -43,5 +49,10 @@ __all__ = [
     'VoicingAlternationRule',
     # Grammatical
     'POSPatternRule',
-    'POSAlternationRule'
+    'POSAlternationRule',
+    # Markov Chain
+    'MarkovChainRule',
+    'MarkovChainBigramRule',
+    'MarkovEmotionalRule',
+    'MarkovPOSRule'
 ]
