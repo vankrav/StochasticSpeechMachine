@@ -50,6 +50,22 @@
                 <input type="range" id="autoReplaceInterval" min="0.01" max="10.0" step="0.01" value="0.5">
             </div>
 
+            <div class="control-group">
+                <label>
+                    ВЫСОТА ОКНА: <span id="focusWindowHeightValue">200</span>PX
+                    <span style="display: block; font-size: 9px; margin-top: 3px; font-weight: normal; opacity: 0.7;">РАЗМЕР ОКНА ВЫДЕЛЕНИЯ</span>
+                </label>
+                <input type="range" id="focusWindowHeight" min="50" max="600" step="10" value="200">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    ПОЗИЦИЯ: <span id="scrollPositionValue">0</span>PX
+                    <span style="display: block; font-size: 9px; margin-top: 3px; font-weight: normal; opacity: 0.7;">ПРОКРУТКА ТЕКСТА</span>
+                </label>
+                <input type="range" id="scrollPosition" min="-5000" max="5000" step="10" value="0">
+            </div>
+
             <div class="button-group">
                 <button id="playBtn" class="btn-primary">▶ ИГРАТЬ</button>
                 <button id="pauseBtn" class="btn-secondary" disabled>■ ПАУЗА</button>
@@ -57,6 +73,13 @@
                 <button id="clearLoopBtn" class="btn-secondary">⊗ СБРОС ЦИКЛА</button>
                 <button id="replaceRandomBtn" class="btn-secondary">⇄ ЗАМЕНА СЛОВА</button>
                 <button id="autoReplaceToggleBtn" class="btn-secondary">⟳ АВТОЗАМЕНА: ВЫКЛ</button>
+                <button id="sortLoopBtn" class="btn-secondary">⇅ СОРТИРОВАТЬ</button>
+                <button id="focusWindowToggleBtn" class="btn-secondary">□ ОКНО ВЫДЕЛЕНИЯ: ВЫКЛ</button>
+            </div>
+
+            <div class="button-group" style="margin-top: 10px;">
+                <button id="scrollUpBtn" class="btn-secondary">↑ ВВЕРХ</button>
+                <button id="scrollDownBtn" class="btn-secondary">↓ ВНИЗ</button>
             </div>
 
             <div class="info">
@@ -70,8 +93,41 @@
         <!-- Основной экран с текстом -->
         <div class="text-canvas">
             <div class="reader-indicator" id="readerIndicator"></div>
+            <div class="focus-window" id="focusWindow"></div>
             <div class="text-column" id="textColumn">
                 <p class="loading">ЗАГРУЗКА...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для сортировки -->
+    <div id="sortModal" class="modal">
+        <div class="modal-content">
+            <h3>СОРТИРОВКА ЛУПА</h3>
+            
+            <div class="modal-section">
+                <label for="sortParameter">ПАРАМЕТР:</label>
+                <select id="sortParameter">
+                    <option value="word">Алфавит (слово)</option>
+                    <option value="word_length">Длина слова</option>
+                    <option value="pos">Часть речи (POS)</option>
+                    <option value="vowels_percent">Процент гласных</option>
+                    <option value="vowel_consonant_ratio">Соотношение гласных/согласных</option>
+                    <option value="duration">Длительность аудио</option>
+                </select>
+            </div>
+            
+            <div class="modal-section">
+                <label for="sortOrder">ПОРЯДОК:</label>
+                <select id="sortOrder">
+                    <option value="asc">Возрастание (↑)</option>
+                    <option value="desc">Убывание (↓)</option>
+                </select>
+            </div>
+            
+            <div class="modal-buttons">
+                <button id="sortApplyBtn" class="btn-primary">✓ ПРИМЕНИТЬ</button>
+                <button id="sortCancelBtn" class="btn-secondary">✗ ОТМЕНА</button>
             </div>
         </div>
     </div>

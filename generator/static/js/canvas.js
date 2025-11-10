@@ -19,7 +19,12 @@ const state = {
     usageAsReplacement: {}, // Счетчик использования слов в качестве замены {originalIndex: count}
     autoReplaceEnabled: false, // Включена ли автозамена
     autoReplaceInterval: 0.5,  // Интервал автозамены в секундах
-    autoReplaceTimer: null     // Таймер для автозамены
+    autoReplaceTimer: null,    // Таймер для автозамены
+    focusWindowEnabled: false, // Включено ли окно выделения
+    focusWindowHeight: 200,    // Высота окна выделения
+    textScrollOffset: 0,       // Смещение текста для прокрутки (в пикселях)
+    scrollUpdateTimeout: null, // Таймер для обновления границ цикла при прокрутке
+    loopBoundsChanged: false   // Флаг изменения границ цикла
 };
 
 // Инициализация при загрузке страницы
@@ -79,6 +84,16 @@ function setupEventListeners() {
     document.getElementById('replaceRandomBtn').addEventListener('click', replaceRandomWordInLoop);
     document.getElementById('autoReplaceToggleBtn').addEventListener('click', toggleAutoReplace);
     document.getElementById('panelToggle').addEventListener('click', toggleControlsPanel);
+    document.getElementById('sortLoopBtn').addEventListener('click', openSortModal);
+    document.getElementById('sortApplyBtn').addEventListener('click', applySortLoop);
+    document.getElementById('sortCancelBtn').addEventListener('click', closeSortModal);
+    
+    // Закрытие модального окна по клику на фон
+    document.getElementById('sortModal').addEventListener('click', (e) => {
+        if (e.target.id === 'sortModal') {
+            closeSortModal();
+        }
+    });
     
     // Слайдеры
     document.getElementById('readingSpeed').addEventListener('input', (e) => {
@@ -114,6 +129,38 @@ function setupEventListeners() {
             scheduleNextAutoReplace();
         }
     });
+    
+    // Окно выделения
+    document.getElementById('focusWindowHeight').addEventListener('input', (e) => {
+        state.focusWindowHeight = parseInt(e.target.value);
+        document.getElementById('focusWindowHeightValue').textContent = state.focusWindowHeight;
+        updateFocusWindow();
+    });
+    
+    document.getElementById('scrollPosition').addEventListener('input', (e) => {
+        if (!state.focusWindowEnabled) return;
+        
+        state.textScrollOffset = parseInt(e.target.value);
+        document.getElementById('scrollPositionValue').textContent = state.textScrollOffset;
+        
+        const textColumn = document.getElementById('textColumn');
+        textColumn.style.transform = `translateY(${state.textScrollOffset}px)`;
+        textColumn.style.transition = 'none';
+        
+        // Обновляем границы цикла
+        clearTimeout(state.scrollUpdateTimeout);
+        state.scrollUpdateTimeout = setTimeout(() => {
+            updateLoopFromFocusWindow();
+        }, 100);
+    });
+    
+    document.getElementById('focusWindowToggleBtn').addEventListener('click', toggleFocusWindow);
+    document.getElementById('scrollUpBtn').addEventListener('click', scrollTextUp);
+    document.getElementById('scrollDownBtn').addEventListener('click', scrollTextDown);
+    
+    // Прокрутка колесом мыши
+    const textCanvas = document.querySelector('.text-canvas');
+    textCanvas.addEventListener('wheel', handleWheelScroll, { passive: false });
 }
 
 // Отображение текста на экране
@@ -157,7 +204,15 @@ function renderText() {
             element.dataset.replacementCount = replacementCount;
             // Интенсивность цвета зависит от количества замен (макс 5)
             const intensity = Math.min(replacementCount, 5);
-            element.style.backgroundColor = `rgba(255, 200, 100, ${0.1 + intensity * 0.15})`;
+            element.style.backgroundColor = `rgba(0, 0, 254, ${0.1 + intensity * 0.15})`;
+        }
+        
+        // Применяем подсветку для отсортированных слов
+        if (item.sorted && item.sortInfo) {
+            element.classList.add('sorted');
+            element.dataset.sortParameter = item.sortInfo.parameter;
+            element.dataset.sortOrder = item.sortInfo.order;
+            element.dataset.sortTimestamp = item.sortInfo.timestamp;
         }
         
         // Делаем серым текст вне зацикленного фрагмента
@@ -581,6 +636,15 @@ function resetReading() {
 async function readNextWord() {
     if (!state.isPlaying) return;
     
+    // Если границы цикла изменились, переходим к началу нового цикла
+    if (state.loopBoundsChanged) {
+        state.loopBoundsChanged = false;
+        if (state.loopStart !== null) {
+            state.currentIndex = state.loopStart;
+            console.log(`Переход к началу нового цикла: ${state.loopStart}`);
+        }
+    }
+    
     // Проверяем зацикливание
     const hasLoop = state.loopStart !== null && state.loopEnd !== null;
     
@@ -690,6 +754,152 @@ function updateWordCount() {
     document.getElementById('wordCount').textContent = `${totalWords} слов, ${totalPauses} пауз`;
 }
 
+// === СОРТИРОВКА ЛУПА ===
+
+function openSortModal() {
+    // Проверяем, что цикл установлен
+    if (state.loopStart === null || state.loopEnd === null) {
+        alert('СНАЧАЛА УСТАНОВИТЕ ЦИКЛ [ ]');
+        return;
+    }
+    
+    // Показываем модальное окно
+    document.getElementById('sortModal').classList.add('active');
+}
+
+function closeSortModal() {
+    document.getElementById('sortModal').classList.remove('active');
+}
+
+function applySortLoop() {
+    const parameter = document.getElementById('sortParameter').value;
+    const order = document.getElementById('sortOrder').value;
+    
+    console.log(`Сортировка лупа по параметру: ${parameter}, порядок: ${order}`);
+    
+    // Получаем элементы лупа (включая паузы)
+    const loopItems = [];
+    for (let i = state.loopStart; i <= state.loopEnd; i++) {
+        loopItems.push({
+            index: i,
+            item: state.words[i]
+        });
+    }
+    
+    // Разделяем слова и паузы
+    const words = loopItems.filter(item => item.item.type === 'word');
+    const pauses = loopItems.filter(item => item.item.type === 'pause');
+    
+    // Сортируем только слова
+    words.sort((a, b) => {
+        let valueA, valueB;
+        
+        switch (parameter) {
+            case 'word':
+                valueA = (a.item.word || '').toLowerCase();
+                valueB = (b.item.word || '').toLowerCase();
+                break;
+            case 'word_length':
+                valueA = a.item.word_length || 0;
+                valueB = b.item.word_length || 0;
+                break;
+            case 'pos':
+                valueA = a.item.pos || '';
+                valueB = b.item.pos || '';
+                break;
+            case 'vowels_percent':
+                valueA = a.item.vowels_percent || 0;
+                valueB = b.item.vowels_percent || 0;
+                break;
+            case 'vowel_consonant_ratio':
+                valueA = a.item.vowel_consonant_ratio || 0;
+                valueB = b.item.vowel_consonant_ratio || 0;
+                break;
+            case 'duration':
+                valueA = a.item.duration || 0;
+                valueB = b.item.duration || 0;
+                break;
+            default:
+                valueA = a.item.word || '';
+                valueB = b.item.word || '';
+        }
+        
+        // Сравнение
+        let comparison = 0;
+        if (valueA > valueB) {
+            comparison = 1;
+        } else if (valueA < valueB) {
+            comparison = -1;
+        }
+        
+        // Порядок
+        return order === 'asc' ? comparison : -comparison;
+    });
+    
+    // Собираем отсортированные элементы (только слова, без пауз)
+    const sortedWords = words.map(item => item.item);
+    
+    // Заменяем слова в лупе на отсортированные
+    let wordIndex = 0;
+    for (let i = state.loopStart; i <= state.loopEnd; i++) {
+        if (state.words[i].type === 'word' && wordIndex < sortedWords.length) {
+            state.words[i] = sortedWords[wordIndex];
+            // Добавляем метку отсортированного слова
+            state.words[i].sorted = true;
+            state.words[i].sortInfo = {
+                parameter: parameter,
+                order: order,
+                timestamp: Date.now()
+            };
+            wordIndex++;
+        }
+    }
+    
+    // Перерисовываем текст
+    renderText();
+    
+    // Добавляем временную подсветку для отсортированных слов
+    highlightSortedWords();
+    
+    // Закрываем модальное окно
+    closeSortModal();
+    
+    console.log(`Сортировка завершена. Отсортировано ${sortedWords.length} слов`);
+}
+
+function highlightSortedWords() {
+    // Находим все отсортированные слова в лупе
+    const sortedWords = document.querySelectorAll('.word.sorted');
+    
+    sortedWords.forEach((element, index) => {
+        // Добавляем временную подсветку с градиентом
+        element.style.backgroundColor = `rgba(100, 200, 255, ${0.2 + index * 0.05})`;
+        element.style.border = '2px solid rgba(100, 200, 255, 0.8)';
+        element.style.boxShadow = '0 0 10px rgba(100, 200, 255, 0.5)';
+        
+        // Плавное исчезновение подсветки через 3 секунды
+        setTimeout(() => {
+            element.style.transition = 'all 2s ease-out';
+            element.style.backgroundColor = '';
+            element.style.border = '';
+            element.style.boxShadow = '';
+            
+            // Удаляем метки отсортированности через 5 секунд
+            setTimeout(() => {
+                const wordIndex = parseInt(element.dataset.index);
+                if (state.words[wordIndex]) {
+                    state.words[wordIndex].sorted = false;
+                    state.words[wordIndex].sortInfo = null;
+                }
+                element.classList.remove('sorted');
+                element.dataset.sortParameter = '';
+                element.dataset.sortOrder = '';
+                element.dataset.sortTimestamp = '';
+            }, 2000);
+        }, 3000);
+    });
+}
+
 // === УПРАВЛЕНИЕ ПАНЕЛЬЮ ===
 
 function toggleControlsPanel() {
@@ -712,4 +922,236 @@ function toggleControlsPanel() {
         textCanvas.style.marginLeft = '280px';
         textCanvas.style.width = 'calc(100% - 280px)';
     }
+}
+
+// === ОКНО ВЫДЕЛЕНИЯ ===
+
+function toggleFocusWindow() {
+    if (state.focusWindowEnabled) {
+        disableFocusWindow();
+    } else {
+        enableFocusWindow();
+    }
+}
+
+function enableFocusWindow() {
+    state.focusWindowEnabled = true;
+    
+    // Обновляем UI кнопки
+    const button = document.getElementById('focusWindowToggleBtn');
+    button.textContent = '■ ОКНО ВЫДЕЛЕНИЯ: ВКЛ';
+    button.classList.remove('btn-secondary');
+    button.classList.add('btn-primary');
+    
+    // НЕ показываем визуальное окно - только устанавливаем цикл
+    
+    // Устанавливаем цикл
+    updateLoopFromFocusWindow();
+    
+    console.log('Режим окна выделения включен');
+}
+
+function disableFocusWindow() {
+    state.focusWindowEnabled = false;
+    state.textScrollOffset = 0;
+    
+    // Обновляем UI кнопки
+    const button = document.getElementById('focusWindowToggleBtn');
+    button.textContent = '□ ОКНО ВЫДЕЛЕНИЯ: ВЫКЛ';
+    button.classList.remove('btn-primary');
+    button.classList.add('btn-secondary');
+    
+    // Сбрасываем смещение текста
+    const textColumn = document.getElementById('textColumn');
+    textColumn.style.transform = '';
+    
+    // Сбрасываем слайдер
+    document.getElementById('scrollPosition').value = 0;
+    document.getElementById('scrollPositionValue').textContent = '0';
+    
+    // НЕ сбрасываем цикл - он остается установленным
+    
+    console.log('Режим окна выделения выключен');
+}
+
+function updateFocusWindow() {
+    if (!state.focusWindowEnabled) return;
+    
+    // Просто обновляем границы цикла при изменении высоты окна
+    setTimeout(() => updateLoopFromFocusWindow(), 250);
+}
+
+function scrollTextUp() {
+    if (!state.focusWindowEnabled) {
+        alert('ВКЛЮЧИТЕ РЕЖИМ ОКНА ВЫДЕЛЕНИЯ');
+        return;
+    }
+    
+    // Увеличиваем смещение (текст движется вверх)
+    state.textScrollOffset += 50;
+    
+    // Ограничиваем диапазон
+    state.textScrollOffset = Math.max(-5000, Math.min(5000, state.textScrollOffset));
+    
+    applyTextScroll();
+    
+    // Синхронизируем слайдер
+    const roundedOffset = Math.round(state.textScrollOffset);
+    document.getElementById('scrollPosition').value = roundedOffset;
+    document.getElementById('scrollPositionValue').textContent = roundedOffset;
+    
+    // Обновляем границы цикла после прокрутки
+    setTimeout(() => updateLoopFromFocusWindow(), 350);
+}
+
+function scrollTextDown() {
+    if (!state.focusWindowEnabled) {
+        alert('ВКЛЮЧИТЕ РЕЖИМ ОКНА ВЫДЕЛЕНИЯ');
+        return;
+    }
+    
+    // Уменьшаем смещение (текст движется вниз)
+    state.textScrollOffset -= 50;
+    
+    // Ограничиваем диапазон
+    state.textScrollOffset = Math.max(-5000, Math.min(5000, state.textScrollOffset));
+    
+    applyTextScroll();
+    
+    // Синхронизируем слайдер
+    const roundedOffset = Math.round(state.textScrollOffset);
+    document.getElementById('scrollPosition').value = roundedOffset;
+    document.getElementById('scrollPositionValue').textContent = roundedOffset;
+    
+    // Обновляем границы цикла после прокрутки
+    setTimeout(() => updateLoopFromFocusWindow(), 350);
+}
+
+function applyTextScroll() {
+    const textColumn = document.getElementById('textColumn');
+    textColumn.style.transform = `translateY(${state.textScrollOffset}px)`;
+    textColumn.style.transition = 'transform 0.3s ease';
+    
+    console.log(`Текст смещен на ${state.textScrollOffset}px`);
+}
+
+function isElementInFocusWindow(element) {
+    if (!state.focusWindowEnabled) return true;
+    
+    const rect = element.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    const halfWindowHeight = state.focusWindowHeight / 2;
+    
+    // Центр экрана
+    const centerY = windowHeight / 2;
+    
+    // Границы окна выделения
+    const windowTop = centerY - halfWindowHeight;
+    const windowBottom = centerY + halfWindowHeight;
+    
+    // Центр элемента
+    const elementCenterY = rect.top + rect.height / 2;
+    
+    // Проверяем, находится ли центр элемента в окне
+    return elementCenterY >= windowTop && elementCenterY <= windowBottom;
+}
+
+function autoScrollToElement(element) {
+    if (!state.focusWindowEnabled) return;
+    
+    const rect = element.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    const centerY = windowHeight / 2;
+    
+    // Целевая позиция элемента - центр экрана
+    const elementCenterY = rect.top + rect.height / 2;
+    const offsetNeeded = elementCenterY - centerY;
+    
+    // Применяем смещение
+    state.textScrollOffset -= offsetNeeded;
+    
+    const textColumn = document.getElementById('textColumn');
+    textColumn.style.transform = `translateY(${state.textScrollOffset}px)`;
+    textColumn.style.transition = 'transform 0.5s ease';
+}
+
+function updateLoopFromFocusWindow() {
+    if (!state.focusWindowEnabled) return;
+    
+    const allElements = document.querySelectorAll('.word, .pause');
+    if (allElements.length === 0) return;
+    
+    const windowHeight = window.innerHeight;
+    const centerY = windowHeight / 2;
+    const halfWindowHeight = state.focusWindowHeight / 2;
+    
+    // Границы окна выделения
+    const windowTop = centerY - halfWindowHeight;
+    const windowBottom = centerY + halfWindowHeight;
+    
+    let firstInWindow = null;
+    let lastInWindow = null;
+    
+    // Находим все элементы, которые попадают в окно
+    allElements.forEach((element, index) => {
+        const rect = element.getBoundingClientRect();
+        const elementCenterY = rect.top + rect.height / 2;
+        
+        // Проверяем, находится ли центр элемента в окне
+        if (elementCenterY >= windowTop && elementCenterY <= windowBottom) {
+            if (firstInWindow === null) {
+                firstInWindow = index;
+            }
+            lastInWindow = index;
+        }
+    });
+    
+    // Устанавливаем границы цикла
+    if (firstInWindow !== null && lastInWindow !== null) {
+        // Проверяем, изменились ли границы
+        const boundsChanged = (state.loopStart !== firstInWindow || state.loopEnd !== lastInWindow);
+        
+        state.loopStart = firstInWindow;
+        state.loopEnd = lastInWindow;
+        
+        // Устанавливаем флаг если границы изменились и воспроизведение активно
+        if (boundsChanged && state.isPlaying) {
+            state.loopBoundsChanged = true;
+        }
+        
+        // Перерисовываем текст для обновления визуальных рамок
+        renderText();
+        
+        console.log(`Цикл установлен автоматически: [${firstInWindow}] - [${lastInWindow}]`);
+    }
+}
+
+function handleWheelScroll(e) {
+    if (!state.focusWindowEnabled) return;
+    
+    e.preventDefault();
+    
+    // deltaY > 0 = прокрутка вниз (текст движется вверх)
+    // deltaY < 0 = прокрутка вверх (текст движется вниз)
+    // Инвертируем для естественного поведения
+    
+    state.textScrollOffset -= e.deltaY;
+    
+    // Ограничиваем диапазон
+    state.textScrollOffset = Math.max(-5000, Math.min(5000, state.textScrollOffset));
+    
+    const textColumn = document.getElementById('textColumn');
+    textColumn.style.transform = `translateY(${state.textScrollOffset}px)`;
+    textColumn.style.transition = 'none'; // Убираем transition для плавной прокрутки
+    
+    // Синхронизируем слайдер
+    const roundedOffset = Math.round(state.textScrollOffset);
+    document.getElementById('scrollPosition').value = roundedOffset;
+    document.getElementById('scrollPositionValue').textContent = roundedOffset;
+    
+    // Обновляем границы цикла с небольшой задержкой для производительности
+    clearTimeout(state.scrollUpdateTimeout);
+    state.scrollUpdateTimeout = setTimeout(() => {
+        updateLoopFromFocusWindow();
+    }, 100);
 }

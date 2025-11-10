@@ -451,6 +451,16 @@ body {
     border-color: #ff9900;
 }
 
+/* Отсортированные слова - временная подсветка */
+.word.sorted {
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.word.sorted:hover {
+    transform: translateY(-1px);
+}
+
 /* Адаптивный дизайн */
 @media (max-width: 768px) {
     .controls-panel {
@@ -473,3 +483,88 @@ body {
 }
 
 /* Анимация отключена для угловатого дизайна */
+
+/* Модальное окно */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background-color: #ffffff;
+    border: 3px solid #000000;
+    padding: 30px;
+    min-width: 400px;
+    max-width: 500px;
+}
+
+.modal-content h3 {
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    margin: 0 0 25px 0;
+    text-align: center;
+}
+
+.modal-section {
+    margin-bottom: 20px;
+}
+
+.modal-section label {
+    display: block;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    color: #000000;
+}
+
+.modal-section select {
+    width: 100%;
+    padding: 10px;
+    font-family: 'Courier New', 'Courier', monospace;
+    font-size: 13px;
+    font-weight: bold;
+    background: #ffffff;
+    border: 2px solid #000000;
+    cursor: pointer;
+}
+
+.modal-section select:focus {
+    outline: none;
+    border-color: #000000;
+    background: #f0f0f0;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 25px;
+}
+
+.modal-buttons button {
+    flex: 1;
+}
+
+/* Окно выделения - скрыто, используется только для расчета границ цикла */
+.focus-window {
+    display: none !important;
+}
+
+/* Затемнение областей вне окна - отключено */
+.text-canvas.focus-mode::before,
+.text-canvas.focus-mode::after {
+    display: none !important;
+}
